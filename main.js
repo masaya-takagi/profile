@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initRevealOnScroll();
   initStatsCounter();
   initContactForm();
+  initBackgroundAnimation();
 });
 
 /**
@@ -278,4 +279,165 @@ function initContactForm() {
     }
   });
 }
+
+/**
+ * Three.js Background Animation (Plexus Effect)
+ */
+function initBackgroundAnimation() {
+  const container = document.getElementById('canvas-container');
+  if (!container) return;
+
+  let scene, camera, renderer, particles, lines;
+  let mouseX = 0, mouseY = 0;
+  let targetX = 0, targetY = 0;
+
+  const PARTICLE_COUNT = 80;
+  const MAX_DISTANCE = 150;
+
+  // テーマに合わせて配色を取得する関数
+  const getThemeColors = () => {
+    const isLight = document.documentElement.classList.contains('light');
+    return {
+      accentPrimary: isLight ? 0x0284c7 : 0x00d2ff,   // パーティクルの色
+      accentSecondary: isLight ? 0x8b5cf6 : 0xb55fe6 // 線（Plexus）の色
+    };
+  };
+
+  let colors = getThemeColors();
+
+  function init() {
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+    camera.position.z = 400;
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    container.appendChild(renderer.domElement);
+
+    // Particles Setup
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(PARTICLE_COUNT * 3);
+    const velocities = [];
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 800;
+      positions[i * 3 + 1] = (Math.random() - 0.5) * 800;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 800;
+      
+      velocities.push({
+        x: (Math.random() - 0.5) * 0.5,
+        y: (Math.random() - 0.5) * 0.5,
+        z: (Math.random() - 0.5) * 0.5
+      });
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    const material = new THREE.PointsMaterial({
+      size: 3,
+      color: colors.accentPrimary,
+      transparent: true,
+      opacity: 0.8,
+      blending: THREE.AdditiveBlending
+    });
+
+    particles = new THREE.Points(geometry, material);
+    scene.add(particles);
+    particles.userData.velocities = velocities;
+
+    // Lines (Plexus network) Setup
+    const lineGeometry = new THREE.BufferGeometry();
+    const lineMaterial = new THREE.LineBasicMaterial({
+      color: colors.accentSecondary,
+      transparent: true,
+      opacity: 0.2,
+      blending: THREE.AdditiveBlending
+    });
+    lines = new THREE.LineSegments(lineGeometry, lineMaterial);
+    scene.add(lines);
+
+    window.addEventListener('resize', onWindowResize, false);
+    document.addEventListener('mousemove', onMouseMove, false);
+
+    // テーマ切り替えボタンのイベントハンドラーに配色更新をフックする
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+      themeToggle.addEventListener('click', () => {
+        // DOMのクラス切り替え後に色を取得・更新するため、ミリ秒ディレイを挟む
+        setTimeout(() => {
+          colors = getThemeColors();
+          particles.material.color.setHex(colors.accentPrimary);
+          lines.material.color.setHex(colors.accentSecondary);
+        }, 50);
+      });
+    }
+
+    animate();
+  }
+
+  function onMouseMove(event) {
+    mouseX = (event.clientX - window.innerWidth / 2) * 0.05;
+    mouseY = (event.clientY - window.innerHeight / 2) * 0.05;
+  }
+
+  function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+
+    const positions = particles.geometry.attributes.position.array;
+    const vels = particles.userData.velocities;
+
+    // 位置の更新と境界判定
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      positions[i * 3] += vels[i].x;
+      positions[i * 3 + 1] += vels[i].y;
+      positions[i * 3 + 2] += vels[i].z;
+
+      if (Math.abs(positions[i * 3]) > 400) vels[i].x *= -1;
+      if (Math.abs(positions[i * 3 + 1]) > 400) vels[i].y *= -1;
+      if (Math.abs(positions[i * 3 + 2]) > 400) vels[i].z *= -1;
+    }
+    particles.geometry.attributes.position.needsUpdate = true;
+
+    // 線（ネットワーク）の距離判定と更新
+    const linePositions = [];
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      for (let j = i + 1; j < PARTICLE_COUNT; j++) {
+        const dx = positions[i * 3] - positions[j * 3];
+        const dy = positions[i * 3 + 1] - positions[j * 3 + 1];
+        const dz = positions[i * 3 + 2] - positions[j * 3 + 2];
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        if (dist < MAX_DISTANCE) {
+          linePositions.push(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+          linePositions.push(positions[j * 3], positions[j * 3 + 1], positions[j * 3 + 2]);
+        }
+      }
+    }
+    lines.geometry.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+    lines.geometry.attributes.position.needsUpdate = true;
+
+    // マウス追従の視差（パララックス）効果
+    targetX += (mouseX - targetX) * 0.05;
+    targetY += (mouseY - targetY) * 0.05;
+    camera.position.x = targetX;
+    camera.position.y = -targetY;
+    camera.lookAt(scene.position);
+
+    // 回転
+    particles.rotation.y += 0.0015;
+    lines.rotation.y += 0.0015;
+
+    renderer.render(scene, camera);
+  }
+
+  init();
+}
+
 
