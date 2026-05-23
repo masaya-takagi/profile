@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initStatsCounter();
   initContactForm();
   initBackgroundAnimation();
+  initKonamiCode();
 });
 
 /**
@@ -439,5 +440,51 @@ function initBackgroundAnimation() {
 
   init();
 }
+
+/**
+ * Konami Code Easter Egg (3D flip rotation on correct input)
+ */
+function initKonamiCode() {
+  const konamiCode = [
+    'ArrowUp', 'ArrowUp',
+    'ArrowDown', 'ArrowDown',
+    'ArrowLeft', 'ArrowRight',
+    'ArrowLeft', 'ArrowRight',
+    'b', 'a'
+  ];
+  let konamiIndex = 0;
+
+  document.addEventListener('keydown', (e) => {
+    // Normalize case for single character keys
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+
+    if (key === konamiCode[konamiIndex]) {
+      konamiIndex++;
+      if (konamiIndex === konamiCode.length) {
+        triggerKonamiEffect();
+        konamiIndex = 0;
+      }
+    } else {
+      // Reset state (allow restarting command if the wrong key was the first correct key)
+      konamiIndex = (key === konamiCode[0]) ? 1 : 0;
+    }
+  });
+
+  function triggerKonamiEffect() {
+    const main = document.querySelector('main');
+    if (!main) return;
+
+    document.body.classList.add('konami-perspective');
+    main.classList.add('konami-spin');
+
+    // Remove animation classes once the animation ends so it can be repeated
+    main.addEventListener('animationend', function handler() {
+      document.body.classList.remove('konami-perspective');
+      main.classList.remove('konami-spin');
+      main.removeEventListener('animationend', handler);
+    });
+  }
+}
+
 
 
